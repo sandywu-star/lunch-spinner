@@ -169,6 +169,28 @@
 
   .chip-arrow { font-size: 12px; color: var(--blue); line-height: 1; }
 
+  .chip-del {
+    display: none;
+    align-items: center; justify-content: center;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.15);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    border: none;
+    font-family: inherit;
+    padding: 0;
+    transition: background .1s;
+  }
+  .chip-del:hover { background: #c00; }
+  @media (hover: hover) {
+    .chip:hover .chip-arrow { display: none; }
+    .chip:hover .chip-del { display: inline-flex; }
+  }
+
   .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 
   .empty-hint {
@@ -314,8 +336,9 @@ function renderPool() {
   pool.forEach((item, i) => {
     const chip = document.createElement('button');
     chip.className = 'chip pool-chip';
-    chip.innerHTML = `<span>${item}</span><span class="chip-arrow">→</span>`;
-    chip.addEventListener('click', () => moveToWheel(i));
+    chip.innerHTML = `<span>${item}</span><span class="chip-arrow">→</span><button class="chip-del" title="刪除">✕</button>`;
+    chip.addEventListener('click', e => { if (e.target.closest('.chip-del')) return; moveToWheel(i); });
+    chip.querySelector('.chip-del').addEventListener('click', e => { e.stopPropagation(); deleteFromPool(i); });
     addLongPress(chip, () => deleteFromPool(i));
     el.appendChild(chip);
   });
@@ -328,8 +351,9 @@ function renderWheelSlots() {
   wheelItems.forEach((item, i) => {
     const chip = document.createElement('button');
     chip.className = 'chip wheel-chip';
-    chip.innerHTML = `<span class="dot" style="background:${colorFor(i)}"></span><span>${item}</span><span class="chip-arrow" style="color:#f87171">←</span>`;
-    chip.addEventListener('click', () => moveToPool(i));
+    chip.innerHTML = `<span class="dot" style="background:${colorFor(i)}"></span><span>${item}</span><span class="chip-arrow" style="color:#f87171">←</span><button class="chip-del" title="刪除">✕</button>`;
+    chip.addEventListener('click', e => { if (e.target.closest('.chip-del')) return; moveToPool(i); });
+    chip.querySelector('.chip-del').addEventListener('click', e => { e.stopPropagation(); deleteFromWheel(i); });
     addLongPress(chip, () => deleteFromWheel(i));
     el.appendChild(chip);
   });
