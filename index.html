@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>今天吃什麼？</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#e8572a" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="今天吃什麼" />
+<!-- Apple icon (inline SVG as data URI) -->
+<link rel="apple-touch-icon" href="icon-192.png" />
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #faf8f5;
+    --card: #ffffff;
+    --border: #e8e4dd;
+    --text: #1a1a1a;
+    --muted: #888;
+    --accent: #e8572a;
+    --accent-light: #fff0eb;
+    --blue: #3a7bd5;
+    --blue-light: #eef4ff;
+    --radius: 14px;
+    --shadow: 0 2px 16px rgba(0,0,0,.07);
+  }
+
+  body {
+    font-family: 'Noto Sans TC', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    /* 避免 iOS 底部安全區被遮到 */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.25rem 1rem 2rem;
+    gap: 1.25rem;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  header { text-align: center; padding-top: 0.5rem; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+  header p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+  #wheel-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  #wheel-wrap {
+    position: relative;
+    width: min(80vw, 300px);
+    height: min(80vw, 300px);
+  }
+
+  canvas#wheel { border-radius: 50%; width: 100%; height: 100%; display: block; }
+
+  #pointer {
+    position: absolute;
+    top: -14px; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 22px solid #1a1a1a;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.2));
+  }
+
+  #spin-btn {
+    padding: 0.75rem 2.5rem;
+    font-size: 16px; font-weight: 700; font-family: inherit;
+    border: none; border-radius: 100px;
+    background: var(--accent); color: #fff;
+    cursor: pointer;
+    transition: transform .15s, box-shadow .15s, opacity .15s;
+    box-shadow: 0 4px 14px rgba(232,87,42,.35);
+    letter-spacing: .03em;
+  }
+  #spin-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(232,87,42,.4); }
+  #spin-btn:active { transform: translateY(0); }
+  #spin-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  #result-box {
+    min-height: 32px;
+    font-size: 22px; font-weight: 700;
+    color: var(--accent); text-align: center;
+    letter-spacing: .02em;
+  }
+
+  .card {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    box-shadow: var(--shadow);
+  }
+
+  .card-label {
+    font-size: 12px; font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+
+  #add-row { display: flex; gap: 8px; }
+
+  #add-input {
+    flex: 1; padding: 10px 14px;
+    font-size: 15px; font-family: inherit;
+    border: 1.5px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--text);
+    outline: none; transition: border-color .15s;
+  }
+  #add-input:focus { border-color: var(--accent); }
+
+  #add-btn {
+    padding: 10px 16px;
+    font-size: 15px; font-family: inherit; font-weight: 600;
+    border: none; border-radius: 10px;
+    background: var(--accent); color: #fff;
+    cursor: pointer; flex-shrink: 0;
+    transition: opacity .15s;
+  }
+  #add-btn:hover { opacity: .85; }
+
+  .zone {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    min-height: 48px; padding: 10px;
+    border-radius: 10px;
+    border: 1.5px dashed var(--border);
+    background: var(--bg);
+    transition: border-color .15s, background .15s;
+  }
+  .zone.wheel-zone { border-color: #a0c0f0; background: var(--blue-light); }
+  .zone.drag-over { border-style: solid; border-color: var(--blue); background: #ddeeff; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px 6px 12px; border-radius: 100px;
+    font-size: 14px; font-family: inherit;
+    border: none; cursor: pointer;
+    transition: transform .1s, opacity .1s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    line-height: 1;
+  }
+  .chip:active { transform: scale(.95); opacity: .8; }
+
+  .pool-chip { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+  .wheel-chip { background: #dbeeff; border: 1px solid #7aaddc; color: #1a4a7a; }
+
+  .chip-arrow { font-size: 12px; color: var(--blue); line-height: 1; }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+
+  .empty-hint {
+    width: 100%; text-align: center;
+    font-size: 13px; color: #bbb;
+    padding: 4px 0; align-self: center;
+  }
+
+  /* iOS install banner */
+  #install-banner {
+    display: none;
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  #install-banner strong { color: var(--text); }
+  #install-banner .close-banner {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none;
+    font-size: 16px; color: #aaa; cursor: pointer;
+  }
+
+  #install-btn {
+    display: none;
+    padding: 0.6rem 1.5rem;
+    font-size: 14px; font-family: inherit; font-weight: 600;
+    border: 1.5px solid var(--accent); border-radius: 100px;
+    background: var(--accent-light); color: var(--accent);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <h1>今天吃什麼？</h1>
+    <p>點選選項加入或移出轉盤</p>
+  </header>
+
+  <!-- Android install prompt -->
+  <button id="install-btn">📲 安裝到主畫面</button>
+
+  <!-- iOS install hint -->
+  <div id="install-banner">
+    <button class="close-banner" id="close-banner">✕</button>
+    📲 <strong>安裝到主畫面：</strong>點下方 <strong>分享</strong> 按鈕 → 選「<strong>加入主畫面</strong>」，就能像 APP 一樣開啟！
+  </div>
+
+  <section id="wheel-section">
+    <div id="wheel-wrap">
+      <div id="pointer"></div>
+      <canvas id="wheel" width="300" height="300"></canvas>
+    </div>
+    <button id="spin-btn">交給你了！</button>
+    <div id="result-box"></div>
+  </section>
+
+  <div class="card">
+    <p class="card-label">新增選項</p>
+    <div id="add-row">
+      <input id="add-input" placeholder="輸入餐廳或餐點…" maxlength="20" />
+      <button id="add-btn">新增</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="card-label">選項池 <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#aaa">— 點擊加入轉盤</span></p>
+    <div id="pool" class="zone" data-zone="pool"></div>
+  </div>
+
+  <div class="card">
+    <p class="card-label">轉盤中 <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#aaa">— 點擊移出轉盤</span></p>
+    <div id="wheel-slots" class="zone wheel-zone" data-zone="wheel"></div>
+  </div>
+
+</div>
+<script>
+const STORAGE_KEY = 'lunch-spinner-v2';
+const COLORS = ['#F87171','#FB923C','#FBBF24','#34D399','#38BDF8','#818CF8','#E879F9','#F472B6','#4ADE80','#60A5FA'];
+
+let pool = [], wheelItems = [], spinning = false, angle = 0;
+function colorFor(i) { return COLORS[i % COLORS.length]; }
+
+function load() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) { const d = JSON.parse(s); pool = d.pool || []; wheelItems = d.wheelItems || []; }
+  } catch(e) {}
+  if (!pool.length && !wheelItems.length) {
+    pool = ['便當','拉麵','炒飯','壽司','漢堡','沙拉','牛肉麵','披薩','火鍋','咖哩'];
+  }
+}
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({pool, wheelItems})); } catch(e) {}
+}
+
+function drawWheel() {
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas.getContext('2d');
+  const cx = 150, cy = 150, r = 148;
+  ctx.clearRect(0, 0, 300, 300);
+  if (!wheelItems.length) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fillStyle = '#f0ede8'; ctx.fill();
+    ctx.fillStyle = '#aaa'; ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('從選項池加入項目', cx, cy);
+    return;
+  }
+  const seg = (Math.PI * 2) / wheelItems.length;
+  wheelItems.forEach((item, i) => {
+    const start = angle + i * seg, end = start + seg;
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end); ctx.closePath();
+    ctx.fillStyle = colorFor(i); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(start + seg / 2);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#fff';
+    ctx.font = `bold ${wheelItems.length > 8 ? 11 : 13}px 'Noto Sans TC', sans-serif`;
+    ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 2;
+    const label = item.length > 8 ? item.slice(0,7)+'…' : item;
+    ctx.fillText(label, r - 10, 5);
+    ctx.restore();
+  });
+  ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI*2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.strokeStyle = '#e0ddd8'; ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+function renderPool() {
+  const el = document.getElementById('pool');
+  el.innerHTML = '';
+  if (!pool.length) { el.innerHTML = '<span class="empty-hint">沒有待選項目</span>'; return; }
+  pool.forEach((item, i) => {
+    const chip = document.createElement('button');
+    chip.className = 'chip pool-chip';
+    chip.innerHTML = `<span>${item}</span><span class="chip-arrow">→</span>`;
+    chip.addEventListener('click', () => moveToWheel(i));
+    addLongPress(chip, () => deleteFromPool(i));
+    el.appendChild(chip);
+  });
+}
+
+function renderWheelSlots() {
+  const el = document.getElementById('wheel-slots');
+  el.innerHTML = '';
+  if (!wheelItems.length) { el.innerHTML = '<span class="empty-hint">尚無轉盤項目</span>'; drawWheel(); return; }
+  wheelItems.forEach((item, i) => {
+    const chip = document.createElement('button');
+    chip.className = 'chip wheel-chip';
+    chip.innerHTML = `<span class="dot" style="background:${colorFor(i)}"></span><span>${item}</span><span class="chip-arrow" style="color:#f87171">←</span>`;
+    chip.addEventListener('click', () => moveToPool(i));
+    addLongPress(chip, () => deleteFromWheel(i));
+    el.appendChild(chip);
+  });
+  drawWheel();
+}
+
+function render() { renderPool(); renderWheelSlots(); }
+
+function moveToWheel(idx) { wheelItems.push(pool.splice(idx,1)[0]); save(); render(); }
+function moveToPool(idx) { pool.push(wheelItems.splice(idx,1)[0]); save(); render(); }
+function deleteFromPool(idx) { if (!confirm(`刪除「${pool[idx]}」？`)) return; pool.splice(idx,1); save(); render(); }
+function deleteFromWheel(idx) { if (!confirm(`刪除「${wheelItems[idx]}」？`)) return; wheelItems.splice(idx,1); save(); render(); }
+
+function addLongPress(el, cb) {
+  let timer = null;
+  el.addEventListener('touchstart', () => { timer = setTimeout(cb, 600); }, { passive: true });
+  el.addEventListener('touchend', () => clearTimeout(timer));
+  el.addEventListener('touchmove', () => clearTimeout(timer), { passive: true });
+}
+
+document.getElementById('add-btn').addEventListener('click', addItem);
+document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+function addItem() {
+  const input = document.getElementById('add-input');
+  const val = input.value.trim();
+  if (!val) return;
+  pool.push(val); input.value = '';
+  save(); render();
+}
+
+document.getElementById('spin-btn').addEventListener('click', () => {
+  if (spinning || wheelItems.length < 2) return;
+  spinning = true;
+  document.getElementById('spin-btn').disabled = true;
+  document.getElementById('result-box').textContent = '';
+  const extra = Math.PI * 2 * (8 + Math.random() * 6);
+  const duration = 3500 + Math.random() * 1000;
+  const startAngle = angle, targetAngle = startAngle + extra;
+  const start = performance.now();
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function frame(now) {
+    const t = Math.min((now - start) / duration, 1);
+    angle = startAngle + (targetAngle - startAngle) * easeOut(t);
+    drawWheel();
+    if (t < 1) { requestAnimationFrame(frame); return; }
+    angle = targetAngle % (Math.PI * 2); drawWheel();
+    spinning = false;
+    document.getElementById('spin-btn').disabled = false;
+    const seg = (Math.PI * 2) / wheelItems.length;
+    const topAngle = ((-Math.PI / 2 - angle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const idx = Math.floor(topAngle / seg) % wheelItems.length;
+    document.getElementById('result-box').textContent = '🎉 ' + wheelItems[idx];
+  }
+  requestAnimationFrame(frame);
+});
+
+/* ── PWA Install ── */
+let deferredPrompt = null;
+
+// Android / Chrome: beforeinstallprompt
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-btn').style.display = 'inline-block';
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('install-btn').style.display = 'none';
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-btn').style.display = 'none';
+});
+
+// iOS Safari: show manual hint if not already in standalone
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+const bannerDismissed = localStorage.getItem('ios-banner-dismissed');
+
+if (isIOS && !isStandalone && !bannerDismissed) {
+  document.getElementById('install-banner').style.display = 'block';
+}
+
+document.getElementById('close-banner').addEventListener('click', () => {
+  document.getElementById('install-banner').style.display = 'none';
+  localStorage.setItem('ios-banner-dismissed', '1');
+});
+
+/* ── Service Worker ── */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+load(); render();
+</script>
+</body>
+</html>
