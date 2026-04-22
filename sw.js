@@ -1,4 +1,4 @@
-const CACHE = 'lunch-spinner-v1';
+const CACHE = 'lunch-spinner-v2';
 const ASSETS = [
   '.',
   'index.html',
